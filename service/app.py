@@ -1,55 +1,96 @@
-from flask import Flask, render_template, request 
-from logging.config import dictConfig
+from flask import Flask, request, jsonify, render_template
+import joblib
+import numpy as np
+from pathlib import Path
+import logging
+import sys
 
-dictConfig(
-    {
-        "version": 1,
-        "formatters": {
-            "default": {
-                "format": "[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
-            }
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "stream": "ext://sys.stdout",
-                "formatter": "default",
-            },         
-            "file": {
-                "class": "logging.FileHandler",
-                "filename": "flask.log",
-                "formatter": "default",
-            },
-        },
-        "root": {"level": "DEBUG", "handlers": ["console", "file"]},
-    }
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+    handlers=[
+        logging.FileHandler('flask.log'),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Маршрут для отображения формы
+# Конфигурация
+MODEL_PATH = Path('linear_regression_model.pkl')  
+
+class SimpleModel:
+    """Резервная модель если основная не загрузится"""
+    def predict(self, X):
+        return np.array([x[0] * 100000 for x in X])  
+
+def load_model():
+    """Загрузка модели с резервным вариантом"""
+    try:
+        if not MODEL_PATH.exists():
+            logger.warning("Файл модели не найден, используется резервная модель")
+            return SimpleModel()
+        
+        model = joblib.load(MODEL_PATH)
+        
+        # Проверка что модель имеет метод predict
+        if not hasattr(model, 'predict'):
+            logger.warning("Загруженный объект не является моделью, используется резервная")
+            return SimpleModel()
+            
+        logger.info("Модель успешно загружена")
+        return model
+        
+    except Exception as e:
+        logger.error(f"Ошибка загрузки модели: {str(e)}")
+        return SimpleModel()
+
+# Инициализация модели
+model = load_model()
+
 @app.route('/')
-def index():
+def home():
     return render_template('index.html')
 
-# Маршрут для обработки данных формы
-@app.route('/api/numbers', methods=['POST'])
-def process_numbers():
-    # Здесь можно добавить обработку полученных чисел
-    # Для примера просто возвращаем их обратно
-    data = request.get_json()
-    
-    app.logger.info(f'Requst data: {data}')
-    
-    if float(data['area']) >= 0:
-        app.logger.info('status: success, data: Числа успешно обработаны')
-        result_sum = float(data['area']) * 300000
-        app.logger.info(f'Стоимость квартиры: {result_sum}')
-        return {'result': result_sum}
-    else:
-        app.logger.info('status: error, data: Отрицательное значение площади')
-        return {'result': 'error'}
-    
+@app.route('/api/predict', methods=['POST'])
+def predict():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Валидация и преобразование данных
+        try:
+            area = float(data.get('area', 0))
+            rooms = int(data.get('rooms', 1))
+            floor = int(data.get('floor', 1))
+            total_floors = int(data.get('total_floors', 5))
+        except ValueError:
+            return jsonify({'error': 'Invalid parameter types'}), 400
+
+        # Проверка логики
+        if area <= 0:
+            return jsonify({'error': 'Area must be positive'}), 400
+        if floor > total_floors:
+            return jsonify({'error': 'Floor cannot exceed total floors'}), 400
+
+        # Предсказание
+        prediction = model.predict([[area, rooms, floor, total_floors]])[0]
+        price = round(float(prediction), 2)
+        
+        return jsonify({
+            'price': price,
+            'currency': 'RUB',
+            'success': True
+        })
+        
+    except Exception as e:
+        logger.error(f"Prediction error: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, port=5050)
+    logger.info("Starting server...")
+    logger.info(f"Model type: {type(model)}")
+    app.run(host='0.0.0.0', port=5050)
