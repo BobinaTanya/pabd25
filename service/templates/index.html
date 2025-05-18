@@ -1,57 +1,129 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>Калькулятор квартиры</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор стоимости квартиры</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; }
-        input, button { width: 100%; padding: 10px; margin-bottom: 10px; }
-        #result { margin-top: 20px; padding: 10px; border-radius: 5px; }
-        .success { background-color: #e6ffe6; }
-        .error { background-color: #ffe6e6; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        
+        .form-container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .error {
+            color: #dc3545;
+        }
+        
+        .success {
+            color: #28a745;
+        }
     </style>
 </head>
 <body>
-    <h2>Расчет стоимости квартиры</h2>
-    <form onsubmit="predictPrice(); return false;">
-        <input type="number" id="area" placeholder="Площадь (м²)" required min="1">
-        <input type="number" id="rooms" placeholder="Комнат" required min="1">
-        <input type="number" id="floor" placeholder="Этаж" required min="1">
-        <input type="number" id="total_floors" placeholder="Этажность дома" required min="1">
-        <button type="submit">Рассчитать</button>
-    </form>
-    <div id="result"></div>
+    <div class="form-container">
+        <h2>Калькулятор стоимости квартиры</h2>
+        <form id="numberForm">
+            <input type="number" id="num1" placeholder="Площадь квартиры, м²" required min="1">
+            <input type="number" id="num2" placeholder="Количество комнат" required min="1">
+            <input type="number" id="num3" placeholder="Этажей в доме" required min="1">
+            <input type="number" id="num4" placeholder="Этаж квартиры" required min="1">
+            <button type="button" onclick="submitForm()">Рассчитать стоимость</button>
+        </form>
+        <div id="response" class="result"></div>
+    </div>
 
     <script>
-        async function predictPrice() {
-            const resultDiv = document.getElementById('result');
-            resultDiv.className = '';
-            resultDiv.textContent = 'Рассчитываем...';
-            
-            try {
-                const response = await fetch('/api/predict', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        area: document.getElementById('area').value,
-                        rooms: document.getElementById('rooms').value,
-                        floor: document.getElementById('floor').value,
-                        total_floors: document.getElementById('total_floors').value
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) throw new Error(data.error || 'Unknown error');
-                
-                resultDiv.className = 'success';
-                resultDiv.innerHTML = `
-                    Стоимость: <strong>${data.price.toLocaleString('ru-RU')} ${data.currency}</strong>
-                `;
-            } catch (error) {
-                resultDiv.className = 'error';
-                resultDiv.textContent = `Ошибка: ${error.message}`;
-                console.error(error);
+        function formatPrice(price) {
+            // Форматируем цену с разделителями тысяч и округлением
+            return new Intl.NumberFormat('ru-RU', {
+                style: 'decimal',
+                maximumFractionDigits: 0
+            }).format(price);
+        }
+
+        function submitForm() {
+            const num1 = document.getElementById('num1').value;
+            const num2 = document.getElementById('num2').value;
+            const num3 = document.getElementById('num3').value;
+            const num4 = document.getElementById('num4').value;
+
+            // Валидация ввода
+            if (!num1 || !num2 || !num3 || !num4) {
+                document.getElementById('response').innerHTML = 
+                    '<span class="error">Пожалуйста, заполните все поля</span>';
+                return;
             }
+
+            const data = {
+                area: num1,
+                rooms: num2,
+                total_floors: num3,
+                floor: num4
+            };
+
+            // Показываем загрузку
+            document.getElementById('response').innerHTML = 'Идёт расчёт...';
+
+            fetch('/api/numbers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                const responseElement = document.getElementById('response');
+                if (data.result === 'error') {
+                    responseElement.innerHTML = 
+                        '<span class="error">Ошибка при расчёте стоимости</span>';
+                } else {
+                    const formattedPrice = formatPrice(data.result);
+                    responseElement.innerHTML = 
+                        `<span class="success">Примерная стоимость квартиры: ${formattedPrice} ₽</span>`;
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                document.getElementById('response').innerHTML = 
+                    '<span class="error">Произошла ошибка при расчёте стоимости</span>';
+            });
         }
     </script>
 </body>
