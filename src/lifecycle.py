@@ -51,9 +51,13 @@ def preprocess_data():
             dfs.append(df)
 
         combined_df = pd.concat(dfs, ignore_index=True)
+        # Сортируем по ID (новые объявления первыми)
         combined_df = combined_df.sort_values("url_id", ascending=False)
+        # Удаляем дубликаты по ID
         combined_df = combined_df.drop_duplicates(subset="url_id")
+        # Удаляем url_id
         combined_df = combined_df.drop(columns=["url_id"])
+        # Берем только первые 1000 объявлений
         combined_df = combined_df.head(1000)
         output_filename = f"data/raw/{prefix}_combined_sorted.csv"
         combined_df.to_csv(output_filename, index=False)
@@ -109,9 +113,17 @@ if __name__ == "__main__":
         default=TRAIN_SIZE,
     )
     parser.add_argument("-m", "--model", help="Model name", default=MODEL_NAME)
+    parser.add_argument(
+        "-d",
+        "--download_new",
+        help="True or False",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+    )
     args = parser.parse_args()
 
-    # parse_cian()
-    # preprocess_data()
+    if args.download_new:
+        parse_cian()
+        preprocess_data()
     path = train_model()
     test_model(path)
