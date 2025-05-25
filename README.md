@@ -54,11 +54,10 @@ jupyter notebook
 ### Данные
 Были собраны 18.05.2025 В выборку включены 1,2,3,4-х комнатные квартиры. Квартиры отфильтрованы по цене - до 50 млн., и по площади - до 100 м2.
 
-
 ### Метрики оценки
-* **Mean Absolute Error (MAE)**
-* **Mean Squared Error (MSE)**
 * **Root Mean Squared Error (RMSE)**
+* **Mean Absolute Error (MAE)**
+* **Mean Absolute Percentage Error (MAPE)**
 * **R² Score**
 
 ### Результаты
