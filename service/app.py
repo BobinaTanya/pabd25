@@ -40,7 +40,6 @@ def index():
 
 models_dir = 'models'
 
-
 model_files = glob(os.path.join(models_dir, '*.joblib'))
 
 def extract_date(filename):
@@ -49,8 +48,6 @@ def extract_date(filename):
 
 sorted_files = sorted(model_files, key=extract_date)
 MODEL_NAME = sorted_files[-1] if sorted_files else None
-# model = load(latest_model)
-#model = load('../models/best_model.joblib')
 
 # Маршрут для обработки данных формы
 @app.route('/api/numbers', methods=['POST'])
@@ -65,18 +62,18 @@ def process_numbers():
     elif float(data['area']) >= 0:
         app.logger.info('status: success, data: Числа успешно обработаны')
         
+        # Исправленная часть: преобразование категориальных признаков
         new_data = pd.DataFrame({
-            'rooms_count': [float(data['rooms'])], 
-            'floor': [float(data['floor'])], 
+            'rooms_count': [str(int(float(data['rooms'])))],  # Категориальный -> строка
+            'floor': [str(int(float(data['floor'])))],       # Категориальный -> строка 
             'floors_count': [float(data['total_floors'])],
             'total_meters': [float(data['area'])]})        
         result_sum = model.predict(new_data)[0]
         app.logger.info(f'Стоимость квартиры: {result_sum}')
-        return {'result': result_sum}
+        return {'result': float(result_sum)}  # Явное преобразование результата
     else:
         app.logger.info('status: error, data: Отрицательное значение площади')
         return {'result': 'error'}
-    
 
 if __name__ == '__main__':
     """Parse arguments and run lifecycle steps"""
@@ -85,7 +82,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args.model, MODEL_NAME)
 
-    # app.config["model"] = joblib.load(args.model)
     model = load(args.model)
     app.logger.info(f"Use model: {args.model}")
     app.run(debug=False, port=5050)
