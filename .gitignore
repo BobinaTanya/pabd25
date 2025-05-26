@@ -1,7 +1,9 @@
 env/
-data
+data/raw
+data/processed
 flask.log
 *.log
 notebooks/.ipynb_checkpoints
 __pycache__/
 models
+/data
