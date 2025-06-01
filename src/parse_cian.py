@@ -2,6 +2,7 @@
 https://github.com/lenarsaitov/cianparser
 """
 import datetime
+import os
 
 import cianparser
 import pandas as pd
@@ -9,19 +10,20 @@ import pandas as pd
 moscow_parser = cianparser.CianParser(location="Москва")
 
 
-def parse(n_rooms=1, end_page=2):
+def main():
     """
     Function docstring
     """
     t = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
-    csv_path = f'data/raw/{n_rooms}_{t}.csv'
+    n_rooms = 1
+    csv_path = os.path.join('data', 'raw', f'{n_rooms}_{t}.csv')
     data = moscow_parser.get_flats(
         deal_type="sale",
         rooms=(n_rooms,),
         with_saving_csv=False,
         additional_settings={
             "start_page": 1,
-            "end_page": end_page,
+            "end_page": 2,
             "object_type": "secondary"
         })
     df = pd.DataFrame(data)

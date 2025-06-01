@@ -1,0 +1,8 @@
+[core]
+    remote = storage
+    autostage = true
+['remote "myremote"']
+    url = /tmp/dvcstore
+['remote "storage"']
+    url = s3://pabd25/BobinaTanya
+    endpointurl = https://storage.yandexcloud.net

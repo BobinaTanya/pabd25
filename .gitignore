@@ -6,4 +6,3 @@ flask.log
 notebooks/.ipynb_checkpoints
 __pycache__/
 models
-/data
