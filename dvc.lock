@@ -3,15 +3,15 @@ stages:
   preprocess:
     cmd: python src/preprocess_data.py -o data/processed
     deps:
-    - path: data/raw/
+    - path: data/raw
       hash: md5
       md5: 278f9a22de0296d510de24469048f62d.dir
       size: 991103
       nfiles: 12
     - path: src/preprocess_data.py
       hash: md5
-      md5: b25dca0b7b3ee1f755596cddded99c4a
-      size: 3009
+      md5: ad302f1b2a392c3d7ad573a06ed395cf
+      size: 3436
     outs:
     - path: data/processed/test.csv
       hash: md5
@@ -21,3 +21,19 @@ stages:
       hash: md5
       md5: 8112d28ad8ce4f25f506e1caaa5c5da6
       size: 13022
+  train:
+    cmd: python src/train.py
+    deps:
+    - path: data/processed/train.csv
+      hash: md5
+      md5: 8112d28ad8ce4f25f506e1caaa5c5da6
+      size: 13022
+    - path: src/train.py
+      hash: md5
+      md5: 32d055b8a9eb5cefd7e3b2f41e0d9d80
+      size: 2907
+    outs:
+    - path: models/catboost_regression_v1.pkl
+      hash: md5
+      md5: 78e2d184f74e54e5c2d547da583347ae
+      size: 272679

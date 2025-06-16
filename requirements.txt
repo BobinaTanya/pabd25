@@ -7,3 +7,8 @@ matplotlib
 black
 catboost
 dvc
+flask-cors
+boto3
+python-dotenv
+flask_httpauth 
+gunicorn==20.1.0

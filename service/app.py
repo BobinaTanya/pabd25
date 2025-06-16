@@ -1,11 +1,21 @@
-from flask import Flask, render_template, request 
-from logging.config import dictConfig
-from joblib import dump, load
-import pandas as pd
-import os
-from glob import glob
-from datetime import datetime
 import argparse
+from flask import Flask, render_template, request, jsonify
+from logging.config import dictConfig
+from catboost import CatBoostRegressor
+from flask_cors import CORS
+from functools import wraps
+from dotenv import load_dotenv
+import os
+import boto3
+import tempfile
+import joblib
+
+# Загружаем переменные окружения из .env файла
+load_dotenv()
+
+# Глобальные переменные
+model = None
+API_TOKEN = os.getenv('API_TOKEN')
 
 dictConfig(
     {
@@ -20,10 +30,10 @@ dictConfig(
                 "class": "logging.StreamHandler",
                 "stream": "ext://sys.stdout",
                 "formatter": "default",
-            },         
+            },
             "file": {
                 "class": "logging.FileHandler",
-                "filename": "flask.log",
+                "filename": "service/flask.log",
                 "formatter": "default",
             },
         },
@@ -32,56 +42,123 @@ dictConfig(
 )
 
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type", "Authorization"]}})
 
-# Маршрут для отображения формы
-@app.route('/')
-def index():
-    return render_template('index.html')
+def load_model_from_s3():
+    try:
+        app.logger.info("Starting to load model from S3...")
+        s3_client = boto3.client(
+            's3',
+            endpoint_url='https://storage.yandexcloud.net',
+            aws_access_key_id=os.getenv('aws_access_key_id'),
+            aws_secret_access_key=os.getenv('aws_secret_access_key')
+        )
+        app.logger.info("S3 client created successfully")
 
-models_dir = 'models'
-
-model_files = glob(os.path.join(models_dir, '*.joblib'))
-
-def extract_date(filename):
-    date_str = os.path.basename(filename).split('_')[2] + '_' + os.path.basename(filename).split('_')[3].split('.')[0]
-    return datetime.strptime(date_str, '%Y-%m-%d_%H-%M')
-
-sorted_files = sorted(model_files, key=extract_date)
-MODEL_NAME = sorted_files[-1] if sorted_files else None
-
-# Маршрут для обработки данных формы
-@app.route('/api/numbers', methods=['POST'])
-def process_numbers():
-    data = request.get_json()
-    
-    app.logger.info(f'Requst data: {data}')
-    
-    if float(data['total_floors']) < float(data['floor']):
-        app.logger.info('status: error, data: Некорректное количество этажей')
-        return {'result': 'error'}
-    elif float(data['area']) >= 0:
-        app.logger.info('status: success, data: Числа успешно обработаны')
+        bucket_name = 'pabd25'
+        model_key = 'BobinaTanya/models/catboost_regression_v1.pkl'
         
-        # Исправленная часть: преобразование категориальных признаков
-        new_data = pd.DataFrame({
-            'rooms_count': [str(int(float(data['rooms'])))],  # Категориальный -> строка
-            'floor': [str(int(float(data['floor'])))],       # Категориальный -> строка 
-            'floors_count': [float(data['total_floors'])],
-            'total_meters': [float(data['area'])]})        
-        result_sum = model.predict(new_data)[0]
-        app.logger.info(f'Стоимость квартиры: {result_sum}')
-        return {'result': float(result_sum)}  # Явное преобразование результата
-    else:
-        app.logger.info('status: error, data: Отрицательное значение площади')
-        return {'result': 'error'}
+        app.logger.info(f"Attempting to download model from {bucket_name}/{model_key}")
+        
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file.close()
+        
+        try:
+            s3_client.download_file(bucket_name, model_key, temp_file.name)
+            app.logger.info(f"Model downloaded to temporary file: {temp_file.name}")
+            
+            loaded_model = joblib.load(temp_file.name)
+            app.logger.info("Model loaded successfully!")
+            
+            return loaded_model
+            
+        finally:
+            try:
+                os.unlink(temp_file.name)
+                app.logger.info("Temporary file deleted")
+            except Exception as e:
+                app.logger.warning(f"Could not delete temporary file: {str(e)}")
+                
+    except Exception as e:
+        app.logger.error(f"Error loading model from S3: {str(e)}")
+        app.logger.error(f"Error type: {type(e)}")
+        raise
 
-if __name__ == '__main__':
+def init_model(model_path=None):
+    global model
+    try:
+        model = load_model_from_s3()
+        app.logger.info("Model loaded successfully from S3")
+    except Exception as e:
+        app.logger.error(f"Failed to load model from S3: {str(e)}")
+        if model_path:
+            model = joblib.load(model_path)
+            app.logger.info(f"Model loaded from local file: {model_path}")
+        else:
+            raise Exception("No model available")
+
+init_model()
+
+from flask_httpauth import HTTPTokenAuth
+auth = HTTPTokenAuth(scheme='Bearer')
+
+tokens = {API_TOKEN: "user1"} if API_TOKEN else {}
+
+@auth.verify_token
+def verify_token(token):
+    if not token:
+        return None
+    if token in tokens:
+        return tokens[token]
+    return None
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/api/numbers", methods=["POST"])
+@auth.login_required
+def process_numbers():
+    if not request.is_json:
+        return jsonify({"status": "error", "data": "Content-Type must be application/json"}), 400
+
+    data = request.get_json()
+    app.logger.info(f"Request data: {data}")
+
+    try:
+        total_meters = float(data["area"])
+        floors_count = int(data["total_floors"])
+        floor = int(data["floor"])
+        rooms_1 = int(data["rooms"]) == 1
+        rooms_2 = int(data["rooms"]) == 2
+        rooms_3 = int(data["rooms"]) == 3
+        first_floor = int(data["floor"]) == 1
+        last_floor = int(data["floor"]) == floors_count
+    except ValueError:
+        return jsonify({"status": "error", "data": "Ошибка парсинга данных"}), 400
+
+    features = [
+        total_meters,
+        floors_count,
+        floor,
+        rooms_1,
+        rooms_2,
+        rooms_3,
+        first_floor,
+        last_floor,
+    ]
+
+    price = model.predict([features])[0]
+    price = int(price)
+    return jsonify({"status": "success", "data": price})
+
+if __name__ == "__main__":
     """Parse arguments and run lifecycle steps"""
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--model", help="Model name", default=MODEL_NAME)
+    parser.add_argument("-m", "--model", help="Model name", default=None)
     args = parser.parse_args()
-    print(args.model, MODEL_NAME)
-
-    model = load(args.model)
-    app.logger.info(f"Use model: {args.model}")
-    app.run(debug=False, port=5050)
+    
+    if args.model:
+        init_model(args.model)
+    
+    app.run(debug=True)

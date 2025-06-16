@@ -1,10 +1,10 @@
 """Module for data preprocessing"""
-
 import os
 import glob
 import logging
 from pathlib import Path
 import pandas as pd
+import argparse
 
 logger = logging.getLogger(__name__)
 
@@ -12,17 +12,17 @@ def extract_flat_id(url):
     """Extract flat ID from Cian URL"""
     return url.split('/')[-2]
 
-def preprocess_data():
+def preprocess_data(raw_dir, processed_dir):
     """Preprocess the data"""
     logger.info("Starting data preprocessing...")
     try:
-        processed_dir = Path("data/processed")
+        processed_dir = Path(processed_dir)
         processed_dir.mkdir(parents=True, exist_ok=True)
 
-        raw_dir = Path("data/raw")
+        raw_dir = Path(raw_dir)
         raw_files = glob.glob(str(raw_dir / "*.csv"))
         if not raw_files:
-            raise FileNotFoundError("No raw data files found in data/raw/")
+            raise FileNotFoundError(f"No raw data files found in {raw_dir}/")
         
         latest_file = max(raw_files, key=os.path.getctime)
         logger.info(f"Processing file: {latest_file}")
@@ -79,4 +79,11 @@ if __name__ == "__main__":
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
-    preprocess_data() 
+    
+    # Парсим аргументы командной строки
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-o", "--output", required=True, help="Output directory for processed data")
+    parser.add_argument("-d", "--data", default="data/raw", help="Input raw data directory")
+    args = parser.parse_args()
+    
+    preprocess_data(raw_dir=args.data, processed_dir=args.output)

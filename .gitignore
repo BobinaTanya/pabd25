@@ -6,3 +6,7 @@ flask.log
 notebooks/.ipynb_checkpoints
 __pycache__/
 models
+.env
+logs
+venv
+.venv

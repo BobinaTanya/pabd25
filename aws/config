@@ -1,0 +1,5 @@
+[default]
+region = ru-central1
+[remote "storage"]
+endpointurl = https://storage.yandexcloud.net
+url = s3://pabd25/BobinaTanya/
