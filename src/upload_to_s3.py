@@ -6,7 +6,7 @@ import boto3
 
 BUCKET_NAME = 'pabd25'
 YOUR_SURNAME = 'BobinaTanya'
-LOCAL_FILE_PATH = ['models/catboost_regression_v1.pkl']  # Исправлен слеш
+LOCAL_FILE_PATH = ['models/catboost_regression_v1.pkl']
 
 def main(args):
     try:

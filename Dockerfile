@@ -8,6 +8,7 @@ COPY requirements.txt .
 
 # Установить необходимые пакеты, указанные в файле requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install gunicorn
 
 COPY . .
 
